@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "*.parameter": "javascript",
+        "cstdio": "cpp",
+        "cstring": "cpp",
+        "iostream": "cpp"
+    }
+}
