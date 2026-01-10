@@ -4,8 +4,7 @@ char *pProgramPath;
 
 int main(int argc, char *argv[])
 {   
-    int len, j;
-    int action = 0;
+    int j;
 
 //    std::filesystem::path cwd = std::filesystem::current_path();
 //    string str = cwd.string() + "/";
@@ -22,21 +21,8 @@ int main(int argc, char *argv[])
             pProgramPath[j] = 0;
             break;
         }
-    }     
-    len = argc;
-    if(len == 1) // kein Argument
-        action = 2; // Get Lights and Groups
-    else
-    {
-        len = strlen(argv[1]);
-        if(len == 1)
-            action = atoi(argv[1]);
-        if(action < 1 || action > 3)
-        {   cout << "Falscher Parameter\n";
-            exit(1); 
-        }
-    }       
+    }           
     CHue *pHue = new CHue;
-    pHue->Start(action);
+    pHue->Start();
     return 01;
 }

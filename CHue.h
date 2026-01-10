@@ -18,7 +18,7 @@ class CHue {
 public:
     CHue();
     ~CHue();
-    int Start(int action);
+    int Start();
     
 private:
     CReadFile *m_pReadFile;

@@ -10,7 +10,7 @@ CHue::~CHue()
     curl_easy_cleanup(m_pCurl);
 }
 
-int CHue::Start(int action)
+int CHue::Start()
 {
     int iDef, i, iRet = 0;
     string str;
@@ -21,48 +21,39 @@ int CHue::Start(int action)
         cout << "Version 2 ist noch nicht vollständig integriert!!" << endl;
         return 0;
     }
-    switch(action) {
-    case 1: // User Password 
-        i = iDef & 0b01;
-        if(i == 0b01)
-        {
-            iRet = CreateUser();
-            if(iRet == 1)
-            {
-                cout << "Bitte Taster auf der Bridge drücken und danach ENTER drücken" << endl;
-                cin.get();
-                iRet = ReadUser();
-                if(iRet == 1)
-                {               
-                    iRet = ReadGroupsLights(1);
-                    iRet += ReadGroupsLights(2);
-                    if(iRet == 2)
-                    {    
-                        WriteConfig();
-                        cout <<  "Sie finden das Resultat in " << CReadFile::GetName(pProgramPath, 3, 0) << endl;
-                    }
-                }
-                else
-                    cout << "Error: siehe " + CReadFile::GetName(pProgramPath, 2, 0) << endl;
-            }
-        }
-        break;
-    case 2: // Lights and groups
-        i = iDef & 0b11;
-        if(i == 3)
-        {
-            iRet = ReadGroupsLights(1);
-            iRet += ReadGroupsLights(2);
-            if(iRet == 2)
-            {
-                WriteConfig();
-                cout <<  "Sie finden das Resultat in " << CReadFile::GetName(pProgramPath, 3, 0) << endl;
-            }
-        }
-        break;
-    default:
-        break;
+    
+    i = iDef & 0b01;
+    if(i != 0b01)
+    {
+        cout << "IP-Adresse der Bridge nicht definiert!";
+        return 0;
     }
+    i = iDef & 0b11;
+    if(i == 0b01)
+    {
+        iRet = CreateUser();
+        if(iRet == 1)
+        {
+            cout << "Bitte Taster auf der Bridge drücken und danach ENTER drücken" << endl;
+            cin.get();
+            iRet = ReadUser();
+            if(iRet == 1)
+                i = 0b11;
+            else
+                cout << "Error: siehe " + CReadFile::GetName(pProgramPath, 2, 0) << endl;
+        }
+    }
+    if(i == 0b11)
+    {
+        iRet = ReadGroupsLights(1);
+        iRet += ReadGroupsLights(2);
+        if(iRet == 2)
+        {
+            WriteConfig();
+            cout <<  "Sie finden das Resultat in " << CReadFile::GetName(pProgramPath, 3, 0) << endl;
+        }
+    }
+
     return iRet;
 }
 
