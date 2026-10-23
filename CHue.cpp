@@ -16,12 +16,6 @@ int CHue::Start()
     string str;
 
     iDef = ReadConfig();
-    if(m_iVersion > 1)
-    {
-        cout << "Version 2 ist noch nicht vollständig integriert!!" << endl;
-        return 0;
-    }
-    
     i = iDef & 0b01;
     if(i != 0b01)
     {
@@ -45,6 +39,7 @@ int CHue::Start()
     }
     if(i == 0b11)
     {
+        ReadBridgeVersion();
         iRet = ReadGroupsLights(1);
         iRet += ReadGroupsLights(2);
         if(iRet == 2)
@@ -58,17 +53,78 @@ int CHue::Start()
 }
 
 //
+//  Read bridge version
+//
+int CHue::ReadBridgeVersion()
+{
+    int iRet = 0, res, iErr;
+    string strUrl, strUserHeader, strReadBuffer, strVersion, strHelp;
+    struct curl_slist* headers = NULL;
+    CJson *pJson = new CJson;
+    CJsonNodeValue JsonNodeValue;
+    bool bSuccess;
+    long lVersion;
+
+    m_pCurl = curl_easy_init();
+    // Timeout auf 10 Sekunden
+    curl_easy_setopt(m_pCurl, CURLOPT_CONNECTTIMEOUT, 10L);   
+    curl_easy_setopt(m_pCurl, CURLOPT_ERRORBUFFER, m_curlErrorBuffer); 
+    // URL verification
+    curl_easy_setopt(m_pCurl, CURLOPT_SSL_VERIFYPEER, 0L);
+    curl_easy_setopt(m_pCurl, CURLOPT_SSL_VERIFYHOST, 0L); 
+    // URL
+    strUrl = "https://" + m_strIP + "/api/config";
+    strUserHeader = "hue-application-key:" + m_strUSER;
+    headers = curl_slist_append(headers, strUserHeader.c_str()); 
+    curl_easy_setopt(m_pCurl, CURLOPT_URL, strUrl.c_str());
+    // Headers
+    headers = curl_slist_append(headers, "Content-Type:application/json;charset=utf-8");
+    curl_easy_setopt(m_pCurl, CURLOPT_HTTPHEADER, headers); 
+    // Get
+    curl_easy_setopt(m_pCurl, CURLOPT_HTTPGET, 1L);              
+    // Empfang
+    curl_easy_setopt(m_pCurl, CURLOPT_WRITEFUNCTION, CHue::write_data);
+    curl_easy_setopt(m_pCurl, CURLOPT_WRITEDATA, (void *)&strReadBuffer);    
+    res = curl_easy_perform(m_pCurl);
+    if(res != CURLE_OK)
+        cout << strReadBuffer << endl;
+    else
+    {
+        bSuccess = pJson->parse((char *)strReadBuffer.c_str(), strReadBuffer.length(), &iErr);
+        if(bSuccess)
+        {
+            pJson->WriteToFile("Hue", 2, true);         
+            pJson->get((char *)"swversion", &JsonNodeValue);
+            strVersion = JsonNodeValue.asString();
+            lVersion = atol(strVersion.c_str());
+            strHelp = "'swversion: " + strVersion;
+            if(m_iVersion > 1)
+            {
+                if(lVersion < 1955082050l)
+                    strHelp += " nicht für Version 2 geeignet";
+                if(lVersion < 1948086000l)
+                    strHelp += " nicht für Entertainment geeignet";
+                strHelp += "\n";
+            }
+            m_strBuffer.push_back(strHelp);            
+        }
+    }     
+
+    return iRet;
+}
+//
 // Read Groups and Lights
 //
 
 int CHue::ReadGroupsLights(int iTyp)
 {
     int iRet = 0, res, iErr, iNr;
-    string strUrl, strReadBuffer, strName;
+    string strUrl, strReadBuffer, strName, strID;
     struct curl_slist* headers = NULL;
     CJson *pJson = new CJson;
     CJsonNodeValue JsonNodeValue;
-    CJsonNode *pJsonNode;    
+    CJsonNode *pJsonNode;
+    string strUserHeader;    
     bool bSuccess;
 
     m_pCurl = curl_easy_init();
@@ -88,7 +144,13 @@ int CHue::ReadGroupsLights(int iTyp)
             strUrl += "/api/" + m_strUSER + "/groups";        
         break;
     case 2:
-        strUrl += "";
+        strUrl += "/clip/v2/resource/";
+        if(iTyp == 1)
+            strUrl += "light";
+        if(iTyp == 2)
+            strUrl += "room";
+        strUserHeader = "hue-application-key:" + m_strUSER;
+        headers = curl_slist_append(headers, strUserHeader.c_str());            
         break;
     default:
         strUrl = "";
@@ -111,7 +173,7 @@ int CHue::ReadGroupsLights(int iTyp)
         bSuccess = pJson->parse((char *)strReadBuffer.c_str(), strReadBuffer.length(), &iErr);
         if(bSuccess)
         {
-            pJson->WriteToFile("Hue", 2, true);
+            pJson->WriteToFile("Hue", 2, false);           
             switch(m_iVersion) {
             case 1:  // V1
                 for(iNr=1; iNr < 256; iNr++)
@@ -124,13 +186,40 @@ int CHue::ReadGroupsLights(int iTyp)
                             strName = "HUELIGHT:";
                         else
                             strName = "HUEGROUP:";
-                        strName += to_string(iNr) + ";255  ' " + JsonNodeValue.asString() + "\n";
+                        strName += to_string(iNr) + ";256  ' " + JsonNodeValue.asString() + "\n";
                         m_strBuffer.push_back(strName);
                     }
                 } 
                 iRet = 1;
                 break;
             case 2:
+                for(iNr=1; iNr < 256; iNr++)
+                {
+                    pJsonNode = pJson->get((char *)"data", &JsonNodeValue)->get((char *)to_string(iNr).c_str(), &JsonNodeValue);
+                    if(JsonNodeValue.m_iTyp == 1)
+                    {
+                        pJsonNode->get((char*)"metadata", &JsonNodeValue)->get((char *)"name", &JsonNodeValue);
+                        strName = JsonNodeValue.asString();
+                        pJsonNode->get((char*)"id", &JsonNodeValue);
+                        strID = JsonNodeValue.asString();                    
+                        if(iTyp == 1)
+                        {   
+                            pJsonNode->get((char*)"id", &JsonNodeValue);
+                            strID = JsonNodeValue.asString();                        
+                            strName = "HUELIGHT:" + strID + ";100  '" + strName + "\n";
+                        }
+                        else
+                        {
+                            pJsonNode->get((char*)"services", &JsonNodeValue)
+                                ->get((char *)to_string(1).c_str(), &JsonNodeValue)
+                                ->get((char *)"rid", &JsonNodeValue);
+                            strID = JsonNodeValue.asString();
+                            strName = "HUEGROUP:"+ strID + ";100  '" + strName + "\n";
+                        }
+                        m_strBuffer.push_back(strName);
+                    }
+                } 
+                iRet = 1;            
                 break;
             }             
         }

@@ -38,6 +38,7 @@ private:
     int CreateUser();
     int ReadUser();
     int ReadGroupsLights(int iTyp);
+    int ReadBridgeVersion();
     string ReplaceBackSlash(string str);
 };
 
